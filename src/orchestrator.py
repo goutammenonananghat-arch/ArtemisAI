@@ -47,3 +47,38 @@ class Orchestrator:
     def store_secret(self, name: str, secret: str) -> None:
         """Store a credential securely after confirmation."""
         self.run(lambda: self.secrets.store(name, secret), privileged=True)
+
+    # LLM interaction ----------------------------------------------------------
+    def stream_chat(self, prompt: str, model: str = "gpt-3.5-turbo"):
+        """Yield a language model response token-by-token.
+
+        Parameters
+        ----------
+        prompt:
+            The user prompt to send to the model.
+        model:
+            LLM model identifier understood by the OpenAI API.
+
+        Yields
+        ------
+        str
+            Successive chunks of the model response as they arrive.
+        """
+        try:
+            import openai
+        except Exception as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("openai package is required for streaming chat") from exc
+
+        api_key = self.secrets.retrieve("openai_api_key")
+        if api_key:
+            openai.api_key = api_key
+
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            stream=True,
+        )
+        for chunk in response:
+            delta = chunk["choices"][0]["delta"].get("content")
+            if delta:
+                yield delta
