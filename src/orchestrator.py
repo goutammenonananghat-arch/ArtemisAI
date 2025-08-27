@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Any
+from typing import Any, Callable
+
+from alerts import send as send_alert
 
 from security.secrets_manager import SecretsManager
 
@@ -42,6 +44,11 @@ class Orchestrator:
                 return None
             _logger.info("Approved privileged command '%s'", func.__name__)
         return func(*args, **kwargs)
+
+    def alert(self, channel: str, message: str) -> None:
+        """Trigger an alert using the shared alerting module."""
+
+        send_alert(channel, message)
 
     # Example sensitive operation ------------------------------------------------
     def store_secret(self, name: str, secret: str) -> None:
