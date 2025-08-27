@@ -1,3 +1,7 @@
+
 prometheus_client
 opentelemetry-api
 opentelemetry-sdk
+
+APScheduler
+SQLAlchemy
