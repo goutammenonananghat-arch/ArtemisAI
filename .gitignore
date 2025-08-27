@@ -2,3 +2,4 @@
 secret.key
 secrets.dat
 __pycache__/
+data/
