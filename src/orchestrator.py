@@ -24,6 +24,7 @@ class Orchestrator:
 
     def __init__(self) -> None:
         self.secrets = SecretsManager()
+        self.skills: dict[str, Callable[..., Any]] = {}
 
     def _confirm(self, message: str) -> bool:
         response = input(f"{message} (y/n): ").strip().lower()
@@ -42,6 +43,17 @@ class Orchestrator:
                 return None
             _logger.info("Approved privileged command '%s'", func.__name__)
         return func(*args, **kwargs)
+
+    # ------------------------------------------------------------------
+    def register_skill(self, name: str, func: Callable[..., Any]) -> None:
+        """Register ``func`` under ``name`` for later dispatch."""
+        self.skills[name] = func
+
+    def dispatch(self, name: str, *args: Any, privileged: bool = False, **kwargs: Any) -> Any:
+        """Execute a previously registered skill by ``name``."""
+        if name not in self.skills:
+            raise KeyError(f"Unknown skill '{name}'")
+        return self.run(self.skills[name], *args, privileged=privileged, **kwargs)
 
     # Example sensitive operation ------------------------------------------------
     def store_secret(self, name: str, secret: str) -> None:
