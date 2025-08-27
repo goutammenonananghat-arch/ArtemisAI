@@ -1,0 +1,4 @@
+# Ignore secret key and stored credentials
+secret.key
+secrets.dat
+__pycache__/
