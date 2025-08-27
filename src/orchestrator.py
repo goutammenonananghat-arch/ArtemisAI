@@ -1,11 +1,24 @@
-"""Orchestrator module with permission prompts and audit logging."""
+"""Skill orchestration with permission prompts and audit logging."""
 from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Callable, Any
+from typing import Any, Callable, List, Tuple, Protocol
 
-from security.secrets_manager import SecretsManager
+
+class Skill(Protocol):
+    """Protocol all skills must follow."""
+
+    def can_handle(self, intent: str) -> bool:
+        """Return True if the skill can handle the intent."""
+
+        ...
+
+    def execute(self, payload: dict) -> Any:
+        """Perform the skill's action using ``payload``."""
+
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Configure audit logging
@@ -18,32 +31,38 @@ _formatter = logging.Formatter("%(asctime)s - %(message)s")
 _handler.setFormatter(_formatter)
 _logger.addHandler(_handler)
 
+# Registry storing (skill, privileged) pairs
+_registry: List[Tuple[Skill, bool]] = []
 
-class Orchestrator:
-    """Coordinate operations, prompting for privilege where required."""
 
-    def __init__(self) -> None:
-        self.secrets = SecretsManager()
+def register_skill(skill: Skill, *, privileged: bool = False) -> None:
+    """Register a skill for later dispatch."""
 
-    def _confirm(self, message: str) -> bool:
-        response = input(f"{message} (y/n): ").strip().lower()
-        return response == "y"
+    _registry.append((skill, privileged))
 
-    def run(self, func: Callable[..., Any], *args: Any, privileged: bool = False, **kwargs: Any) -> Any:
-        """Execute ``func`` optionally requiring privilege.
 
-        When ``privileged`` is True, the user is prompted for confirmation
-        before execution.  The attempt is logged to ``logs/security.log``.
-        """
-        if privileged:
-            if not self._confirm(f"Privileged action '{func.__name__}' requested. Proceed?"):
-                _logger.info("Denied privileged command '%s'", func.__name__)
-                print("Action cancelled.")
-                return None
-            _logger.info("Approved privileged command '%s'", func.__name__)
-        return func(*args, **kwargs)
+def _confirm(message: str) -> bool:
+    response = input(f"{message} (y/n): ").strip().lower()
+    return response == "y"
 
-    # Example sensitive operation ------------------------------------------------
-    def store_secret(self, name: str, secret: str) -> None:
-        """Store a credential securely after confirmation."""
-        self.run(lambda: self.secrets.store(name, secret), privileged=True)
+
+def _run(func: Callable[..., Any], *args: Any, privileged: bool = False, **kwargs: Any) -> Any:
+    """Execute ``func`` optionally requiring privilege confirmation."""
+
+    if privileged:
+        if not _confirm(f"Privileged action '{func.__name__}' requested. Proceed?"):
+            _logger.info("Denied privileged command '%s'", func.__name__)
+            print("Action cancelled.")
+            return None
+        _logger.info("Approved privileged command '%s'", func.__name__)
+    return func(*args, **kwargs)
+
+
+def dispatch(intent: str, payload: dict) -> Any:
+    """Dispatch ``payload`` to the first registered skill that can handle it."""
+
+    for skill, privileged in _registry:
+        if skill.can_handle(intent):
+            return _run(skill.execute, payload, privileged=privileged)
+    raise ValueError(f"No skill found for intent '{intent}'")
+
