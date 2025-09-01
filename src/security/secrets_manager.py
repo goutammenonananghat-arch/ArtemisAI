@@ -10,8 +10,14 @@ from __future__ import annotations
 
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Dict, Optional
+
+from metrics import track_metrics
+from tracing import traced
+
+_logger = logging.getLogger(__name__)
 
 
 class SecretsManager:
@@ -66,13 +72,20 @@ class SecretsManager:
 
     # ------------------------------------------------------------------
     # Public API
+    @traced
+    @track_metrics
     def store(self, name: str, secret: str) -> None:
         """Store a secret under ``name``."""
         data = self._load_all()
         data[name] = secret
         self._save_all(data)
+        _logger.info("Stored secret", extra={"name": name})
 
+    @traced
+    @track_metrics
     def retrieve(self, name: str) -> Optional[str]:
         """Retrieve secret ``name`` if present."""
         data = self._load_all()
-        return data.get(name)
+        result = data.get(name)
+        _logger.info("Retrieved secret", extra={"name": name, "found": result is not None})
+        return result
